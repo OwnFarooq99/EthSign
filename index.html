@@ -1,0 +1,183 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>$SIGN Flappy — Play</title>
+  <style>
+    html,body{height:100%;margin:0;background:#081023;color:#fff;font-family:system-ui,Arial;}
+    .wrap{min-height:100vh;display:flex;align-items:center;justify-content:center;padding:12px;}
+    canvas{border-radius:12px;box-shadow:0 8px 30px rgba(0,0,0,0.45);touch-action: manipulation;display:block;}
+    .note{position:fixed;left:12px;bottom:12px;font-size:13px;color:#dfeaff}
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <canvas id="gameCanvas"></canvas>
+  </div>
+  <div class="note">Tap / Click / Space — flap. Score by passing between 🍊 pillars.</div>
+
+  <script>
+  (function(){
+    const canvas = document.getElementById('gameCanvas');
+    const ctx = canvas.getContext('2d');
+
+    // dynamic size + variables that update on resize
+    let pipeWidth, pipeGap, pipeSpeed;
+    const player = { x:80, y:0, size:40, vel:0, gravity:0.6, lift:-10 };
+    let pipes = [];
+    let running=false, gameOver=false;
+    let score=0, highScore = parseInt(localStorage.getItem('sign_flappy_highscore')||'0',10)||0;
+    let lastPipeTime=0, pipeInterval=1500;
+
+    function resizeAndSetup(){
+      const ww = Math.min(window.innerWidth - 24, 720);
+      const hh = Math.min(window.innerHeight - 160, 920);
+      canvas.width = ww;
+      canvas.height = Math.round(hh * 0.62);
+      player.x = Math.round(canvas.width * 0.18);
+      player.size = Math.round(Math.min(canvas.width, canvas.height) * 0.12);
+      pipeWidth = Math.round(canvas.width * 0.14);
+      pipeGap = Math.round(Math.min(canvas.height * 0.24, 160));
+      pipeSpeed = Math.max(2, canvas.width / 180);
+    }
+    window.addEventListener('resize', () => { resizeAndSetup(); draw(); }); 
+    resizeAndSetup();
+    player.y = canvas.height/2;
+
+    function spawnPipe(){
+      const minGapY = 56;
+      const maxGapY = canvas.height - pipeGap - 56;
+      const gapY = Math.floor(minGapY + Math.random() * Math.max(0, maxGapY - minGapY));
+      pipes.push({ x: canvas.width + 8, gapY: gapY, gap: pipeGap, width: pipeWidth, scored:false });
+    }
+
+    function reset(){
+      pipes = [];
+      score = 0;
+      player.y = canvas.height/2;
+      player.vel = 0;
+      running = false;
+      gameOver = false;
+    }
+
+    function flap(){
+      player.vel = player.lift;
+      // if game over, restart immediately on flap
+      if (gameOver){ reset(); running=true; }
+      else running = true;
+    }
+
+    // Controls: touch, mouse, keyboard
+    canvas.addEventListener('touchstart', function(e){ e.preventDefault(); flap(); }, {passive:false});
+    canvas.addEventListener('mousedown', function(e){ e.preventDefault(); flap(); });
+    window.addEventListener('keydown', function(e){ if (e.code==='Space') { e.preventDefault(); flap(); } });
+
+    function update(dt){
+      if (!running) return;
+
+      const now = Date.now();
+      if (now - lastPipeTime > pipeInterval){ spawnPipe(); lastPipeTime = now; }
+
+      player.vel += player.gravity;
+      if (player.vel > 12) player.vel = 12;
+      player.y += player.vel;
+
+      // collide floor/ceiling
+      if (player.y - player.size/2 < 0 || player.y + player.size/2 > canvas.height - 18){
+        gameOver = true; running = false;
+      }
+
+      // pipes update & collisions
+      for (let i=pipes.length-1;i>=0;i--){
+        const p = pipes[i];
+        p.x -= pipeSpeed;
+
+        // score
+        if (!p.scored && p.x + p.width < player.x - player.size/2){
+          p.scored = true;
+          score++;
+          if (score > highScore){ highScore = score; localStorage.setItem('sign_flappy_highscore', highScore); }
+        }
+
+        // collision check in x range
+        if (player.x + player.size/2 > p.x && player.x - player.size/2 < p.x + p.width){
+          if (player.y - player.size/2 < p.gapY || player.y + player.size/2 > p.gapY + p.gap){
+            gameOver = true; running = false;
+          }
+        }
+
+        if (p.x + p.width < -40) pipes.splice(i,1);
+      }
+    }
+
+    function draw(){
+      // background
+      ctx.clearRect(0,0,canvas.width,canvas.height);
+      const g = ctx.createLinearGradient(0,0,0,canvas.height);
+      g.addColorStop(0,'#9ce1ff'); g.addColorStop(1,'#61aef0');
+      ctx.fillStyle = g; ctx.fillRect(0,0,canvas.width,canvas.height);
+
+      // ground
+      ctx.fillStyle = '#2b2b2b'; ctx.fillRect(0, canvas.height-18, canvas.width, 18);
+
+      // pipes (🍊 pillars)
+      for (const p of pipes){
+        ctx.fillStyle = '#e17c00';
+        ctx.fillRect(p.x, 0, p.width, p.gapY);
+        ctx.fillRect(p.x, p.gapY + p.gap, p.width, canvas.height - (p.gapY + p.gap) - 18);
+
+        // draw 🍊 along each pillar for visual
+        const emojiSize = Math.round(p.width * 0.6);
+        ctx.font = `${emojiSize}px serif`;
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        for (let y = emojiSize/2; y < p.gapY; y += emojiSize * 1.05){
+          ctx.fillText('🍊', p.x + p.width/2, y);
+        }
+        for (let y = p.gapY + p.gap + emojiSize/2; y < canvas.height - 18; y += emojiSize * 1.05){
+          ctx.fillText('🍊', p.x + p.width/2, y);
+        }
+      }
+
+      // player ($SIGN)
+      ctx.font = `${player.size}px sans-serif`;
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillStyle = '#fff';
+      ctx.fillText('$SIGN', player.x, player.y);
+
+      // score / best
+      ctx.font = `${Math.round(canvas.width*0.07)}px sans-serif`;
+      ctx.fillStyle = '#fff';
+      ctx.textAlign = 'left';
+      ctx.fillText(`Score: ${score}`, 12, 28);
+      ctx.textAlign = 'right';
+      ctx.fillText(`Best: ${highScore}`, canvas.width - 12, 28);
+
+      // start / game over overlays
+      if (!running && !gameOver){
+        ctx.fillStyle = 'rgba(0,0,0,0.45)';
+        ctx.fillRect(canvas.width/2 - 120, canvas.height/2 - 36, 240, 72);
+        ctx.fillStyle = '#fff'; ctx.textAlign='center';
+        ctx.font = '20px sans-serif'; ctx.fillText('Tap to Start', canvas.width/2, canvas.height/2 - 4);
+        ctx.font = '14px sans-serif'; ctx.fillText('Tap / Space to flap', canvas.width/2, canvas.height/2 + 20);
+      } else if (gameOver){
+        ctx.fillStyle = 'rgba(0,0,0,0.55)';
+        ctx.fillRect(canvas.width/2 - 140, canvas.height/2 - 58, 280, 116);
+        ctx.fillStyle = '#fff'; ctx.textAlign='center';
+        ctx.font = '32px sans-serif'; ctx.fillText('Game Over', canvas.width/2, canvas.height/2 - 18);
+        ctx.font = '18px sans-serif'; ctx.fillText(`Score: ${score} — Tap to Retry`, canvas.width/2, canvas.height/2 + 22);
+      }
+    }
+
+    let lastTime = 0;
+    function loop(time){
+      const dt = time - lastTime; lastTime = time;
+      update(dt); draw(); requestAnimationFrame(loop);
+    }
+    resizeAndSetup(); requestAnimationFrame(loop);
+  })();
+  </script>
+</body>
+</html>
