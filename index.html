@@ -24,7 +24,7 @@
 
     // dynamic size + variables that update on resize
     let pipeWidth, pipeGap, pipeSpeed;
-    const player = { x:80, y:0, size:40, vel:0, gravity:0.6, lift:-10 };
+    const player = { x:80, y:0, size:40, vel:0, gravity:0.35, lift:-10 }; // 👈 gravity slower
     let pipes = [];
     let running=false, gameOver=false;
     let score=0, highScore = parseInt(localStorage.getItem('sign_flappy_highscore')||'0',10)||0;
@@ -140,8 +140,8 @@
         }
       }
 
-      // player ($SIGN)
-      ctx.font = `${player.size}px sans-serif`;
+      // player ($SIGN) — made smaller
+      ctx.font = `${player.size * 0.7}px sans-serif`; // 👈 smaller size
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
       ctx.fillStyle = '#fff';
@@ -180,4 +180,4 @@
   })();
   </script>
 </body>
-</html>
+  </html>
